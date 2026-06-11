@@ -1,110 +1,116 @@
-# دليل تشغيل كويز الوفرة المالية — كاش كلينك
+# Cash Clinic — Abundance Quiz setup guide
 
-نظام كامل: كويز ← نتيجة ← دفع عبر Tap ← توصيل الكتاب على الإيميل تلقائياً.
+A complete system: quiz → result → Tap payment → the digital book is emailed automatically.
 
 ```
-index.html        ← الكويز (GitHub Pages)
-success.html      ← صفحة بعد الدفع
-firestore.rules   ← قواعد أمان قاعدة البيانات
-storage.rules     ← قواعد أمان الكتاب (خاص)
-firebase.json     ← ربط الإعدادات
+index.html          ← the quiz (GitHub Pages)
+success.html        ← post-payment page
+logo-wordmark.png   ← logo used in the header / emails
+favicon.png         ← browser tab icon
+firestore.rules     ← database security rules
+storage.rules       ← book security rules (private)
+firebase.json       ← ties the config together
 functions/
-  index.js        ← السيرفر: إنشاء الدفعة + التحقق + إيميل الكتاب
+  index.js          ← server: create charge + verify + email the book
   package.json
-  .env.example    ← انسخه باسم .env وعبّيه
+  .env              ← already filled with your values (edit SUCCESS_URL)
 ```
 
-البنية الآمنة باختصار: **مفتاح Tap السري وكلمة سر الإيميل ما يطلعون أبداً للمتصفح** — كلهم بالسيرفر (Cloud Functions). السعر محسوب بالسيرفر مو من الصفحة، والكتاب خاص ويوصل عبر رابط موقّع ينتهي خلال ٧ أيام.
+**Security in one line:** the Tap secret key and the email password never touch the browser — they live only on the server (Cloud Functions). The price is enforced server-side (not in the page), and the book is private and delivered through a signed link that expires after 7 days.
 
 ---
 
-## قبل ما تبدأ تحتاج
-- مشروع Firebase على خطة **Blaze** (الفنكشنز + إرسال طلبات لـ Tap تحتاج Blaze، تبقى شبه مجانية للاستخدام الخفيف).
-- حساب **Tap Payments** (مفتاح سري `sk_test_...` للتجربة، `sk_live_...` للتشغيل).
-- إيميل لإرسال الكتاب (Gmail أو إيميل دومينك `cashclinic.net`).
-- ملف الكتاب PDF.
+## What you need first
+- A Firebase project on the **Blaze** plan (Functions + outbound calls to Tap need Blaze; it stays near-free for light usage).
+- A **Tap Payments** account (secret key `sk_test_...` for testing, `sk_live_...` for live).
+- The sending email (Google Workspace — `abdullah.a@cashclinic.net`).
+- The book PDF file.
 
 ---
 
-## ١) إعداد الملفات
-١. حمّل المجلد كامل عندك على الكمبيوتر.
-٢. في **`index.html`** و **`success.html`** بدّل قيم `CONFIG.firebase` بقيم مشروعك
-   (Firebase Console ← ⚙️ Project settings ← Your apps ← Web app → config).
-٣. في `functions/` انسخ `.env.example` باسم **`.env`** وعبّي القيم (السعر، الإيميل، رابط النجاح…).
+## 1) Prepare the files
+1. Download the whole folder to your computer.
+2. In **`index.html`** and **`success.html`**, replace the `CONFIG.firebase` values with your project's
+   (Firebase Console → Project settings → Your apps → Web app → config).
+3. In `functions/.env`, it's already filled — just set **`SUCCESS_URL`** to your GitHub Pages link
+   (the one that ends with `/success.html`).
 
 ---
 
-## ٢) رفع الكتاب (خاص)
+## 2) Upload the book (private)
 ```
-firebase storage:objects:upload ./dalil-alwafra.pdf gs://YOUR_BUCKET/books/dalil-alwafra.pdf
+firebase storage:objects:upload ./dalil-alwafra.pdf gs://cash-quiz-906a6.firebasestorage.app/books/dalil-alwafra.pdf
 ```
-أو من Firebase Console ← Storage ← أنشئ مجلد `books` وارفع الملف فيه.
-خله بنفس المسار اللي في `BOOK_STORAGE_PATH` داخل `.env`.
+Or from Firebase Console → Storage → create a `books` folder and upload the file there.
+Keep it at the same path set in `BOOK_STORAGE_PATH` inside `.env`.
 
 ---
 
-## ٣) المفاتيح السرية (مرة وحدة)
-من التيرمنال داخل مجلد المشروع:
+## 3) Set the secrets (one time)
+From the terminal, inside the project folder:
 ```
-firebase functions:secrets:set TAP_SECRET_KEY     # الصق sk_test_... ثم Enter
-firebase functions:secrets:set SMTP_PASS          # كلمة سر الإيميل / App Password
+firebase functions:secrets:set TAP_SECRET_KEY     # paste sk_test_... then Enter
+firebase functions:secrets:set SMTP_PASS          # the email App Password
 ```
-> **Gmail:** فعّل التحقق بخطوتين ثم أنشئ **App Password** واستخدمه هنا (مو كلمة سرك العادية).
+> **Google Workspace email:** turn on 2-Step Verification for `abdullah.a@cashclinic.net`, then create an
+> **App Password** (myaccount.google.com → Security → App passwords) and use that 16-character code here —
+> not the normal login password. If App Passwords don't show up, your Workspace admin needs to allow them.
 
 ---
 
-## ٤) النشر (Deploy)
+## 4) Deploy
 ```
 cd functions && npm install && cd ..
 firebase deploy --only functions,firestore:rules,storage
 ```
-بعد النشر بتطلع لك روابط الفنكشنز. **انسخ رابط `tapWebhook`** — شكله:
+After deploying, the function URLs are printed. **Copy the `tapWebhook` URL**, it looks like:
 `https://us-central1-PROJECT.cloudfunctions.net/tapWebhook`
 
 ---
 
-## ٥) ربط Tap بالـ Webhook
-في لوحة Tap → **Developers / Webhooks** → الصق رابط `tapWebhook`.
-هذا اللي يخلي الكتاب يطلع تلقائياً بعد نجاح الدفع (حتى لو العميل سكّر الصفحة).
-تأكد إن المفتاح السري في الخطوة ٣ من نفس بيئة Tap (test أو live).
+## 5) Connect Tap to the webhook
+In the Tap dashboard → **Developers / Webhooks** → paste the `tapWebhook` URL.
+This is what makes the book go out automatically after a successful payment (even if the buyer closes the page).
+Make sure the secret key from step 3 is from the same Tap environment (test or live).
 
 ---
 
-## ٦) نشر الواجهة على GitHub Pages
-١. ارفع **`index.html`** و **`success.html`** مع ملفات الشعار **`logo-wordmark.png`** و **`favicon.png`** في نفس المجلد (نفس طريقة مواقعك السابقة).
-٢. Settings ← Pages ← فعّل النشر من `main`.
-٣. خذ رابط الموقع، وتأكد إن **`SUCCESS_URL`** في `.env` يشير لـ `…/success.html`
-   (لو عدّلته، أعد `firebase deploy --only functions`).
+## 6) Publish the front-end on GitHub Pages
+1. Upload **`index.html`**, **`success.html`**, **`logo-wordmark.png`**, and **`favicon.png`** to the repo,
+   all in the same folder (same drag-and-drop method as your other sites).
+2. Settings → Pages → enable publishing from `main`.
+3. Take the site URL and make sure **`SUCCESS_URL`** in `.env` points to `…/success.html`
+   (if you change it, re-run `firebase deploy --only functions`).
 
 ---
 
-## ٧) جرّب
-- افتح رابط الكويز، جاوب ١١ سؤال، اضغط «شوف نتيجتي».
-- اضغط «احصل على دليل الوفرة المالية» ← عبّي البيانات ← ادفع ببطاقة Tap التجريبية.
-- المفروض: صفحة النجاح تأكد الطلب + يوصلك الكتاب على الإيميل خلال دقائق.
+## 7) Test it
+- Open the quiz link, answer the 11 questions, click "شوف نتيجتي" (See my result).
+- Click "احصل على دليل الوفرة المالية" → fill in the details → pay with a Tap test card.
+- Expected: the success page confirms the order and the book lands in the email within minutes.
 
-**بطاقة تجربة Tap:** `5123 4500 0000 0008` — تاريخ مستقبلي — CVV `100`.
+**Tap test card:** `5123 4500 0000 0008` — any future expiry — CVV `100`.
 
 ---
 
-## التحويل للتشغيل الفعلي (Live)
-١. بدّل المفتاح السري لـ `sk_live_...`:
+## Going live
+1. Switch the secret key to `sk_live_...`:
    ```
    firebase functions:secrets:set TAP_SECRET_KEY
    firebase deploy --only functions
    ```
-٢. حدّث رابط الـ webhook في لوحة Tap لو اختلف بين البيئتين.
+2. Update the webhook URL in the Tap dashboard if it differs between environments.
 
 ---
 
-## وين أشوف الأرقام؟
-- **`leads`** في Firestore = كل من خلّص الكويز (مع درجاته وإجاباته) — حتى لو ما اشترى.
-- **`orders`** = الطلبات والمشتريات (`status: paid` يعني دفع ووصله الكتاب).
+## Where do I see the numbers?
+- **`leads`** in Firestore = everyone who finished the quiz (with their scores and answers) — even if they didn't buy.
+- **`orders`** = orders and purchases (`status: paid` means paid and the book was delivered).
 
-## نقاط أمان مهمة
-- السعر محسوب بالسيرفر؛ تغييره من المتصفح ما يأثر، والسيرفر يرفض أي مبلغ مختلف.
-- الكتاب ما يتسلّم إلا بعد ما السيرفر يتأكد من Tap إن الحالة `CAPTURED`.
-- ما يتأرسل الكتاب مرتين لنفس الطلب (`emailSent`).
-- لو تبين إيصال Tap الجاهز يوصل العميل بعد، غيّري `receipt.email` لـ `true` في `functions/index.js`.
+## Key security notes
+- The price is computed on the server; changing it in the browser does nothing, and the server rejects any mismatched amount.
+- The book is only delivered after the server confirms with Tap that the status is `CAPTURED`.
+- The book is never sent twice for the same order (`emailSent`).
+- If you also want Tap's own receipt emailed to the buyer, set `receipt.email` to `true` in `functions/index.js`.
 
-محتاجة أضبط أي شي (السعر، نص الإيميل، تصميم النتيجة) قوليلي. 🟧
+Need me to adjust anything (price, email copy, result design)? Just tell me.

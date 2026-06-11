@@ -1,0 +1,12 @@
+{
+  "name": "cashclinic-quiz-functions",
+  "description": "Cash Clinic abundance quiz — Tap payment + email delivery",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.1",
+    "nodemailer": "^6.9.14"
+  },
+  "private": true
+}

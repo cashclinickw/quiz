@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>تم الطلب | كاش كلينك</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--blue:#2578C4;--gold:#F3AF2F;--gold-d:#dd9a1c;--ink:#1d2230;--muted:#7c8190;--green:#46B450;--red:#E23B3B;--line:#e9eaee}
+  *{box-sizing:border-box}
+  body{font-family:'Tajawal',sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;
+    background:#f5f7fa;color:var(--ink);padding:20px}
+  .card{background:#fff;max-width:440px;width:100%;border-radius:24px;padding:38px 30px;text-align:center;
+    box-shadow:0 14px 44px rgba(20,30,60,.10)}
+  .card .logo{height:38px;margin-bottom:20px}
+  .ic{width:78px;height:78px;border-radius:50%;display:grid;place-items:center;margin:0 auto 22px;font-size:38px;color:#fff}
+  .ic.ok{background:var(--green)} .ic.wait{background:var(--gold)} .ic.fail{background:var(--red)}
+  h1{font-size:24px;font-weight:800;margin:0 0 10px}
+  p{color:var(--muted);font-size:15px;line-height:1.8;margin:0 0 8px}
+  .mail{font-weight:700;color:var(--ink)}
+  .btn{display:inline-block;margin-top:22px;background:var(--blue);color:#fff;text-decoration:none;
+    font-weight:700;font-size:16px;padding:13px 30px;border-radius:12px}
+  .spin{width:42px;height:42px;border:4px solid var(--line);border-top-color:var(--blue);
+    border-radius:50%;margin:0 auto 22px;animation:r 1s linear infinite}
+  @keyframes r{to{transform:rotate(360deg)}}
+  .wa{margin-top:16px;font-size:13px}
+  .wa a{color:var(--blue);font-weight:700;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <img class="logo" src="logo-wordmark.png" alt="Cash Clinic" />
+  <div class="spin"></div>
+  <h1>نتأكد من دفعتك…</h1>
+  <p>لحظات ونأكد لك الطلب.</p>
+</div>
+
+<script type="module">
+const CONFIG = {
+  firebase: {
+    apiKey:"REPLACE_API_KEY", authDomain:"cash-site-bdd7e.firebaseapp.com",
+    projectId:"cash-site-bdd7e", storageBucket:"cash-site-bdd7e.appspot.com",
+    messagingSenderId:"REPLACE_SENDER_ID", appId:"REPLACE_APP_ID"
+  },
+  functionsRegion:"us-central1",
+  whatsapp:"96522268020"
+};
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+
+const app=initializeApp(CONFIG.firebase);
+const getOrderStatus=httpsCallable(getFunctions(app,CONFIG.functionsRegion),"getOrderStatus");
+const card=document.getElementById("card");
+const orderId=new URLSearchParams(location.search).get("order");
+
+function ok(){ card.innerHTML=`
+  <img class="logo" src="logo-wordmark.png" alt="Cash Clinic" />
+  <div class="ic ok">✓</div>
+  <h1>تم الدفع بنجاح 🎉</h1>
+  <p>أرسلنا لك <span class="mail">دليل الوفرة المالية</span> على إيميلك مباشرة.</p>
+  <p>لو ما وصلتك الرسالة خلال دقائق، تأكد من صندوق <b>Spam / المهملات</b>.</p>
+  <div class="wa">أي مساعدة؟ <a href="https://wa.me/${CONFIG.whatsapp}" target="_blank" rel="noopener">راسلنا واتساب</a></div>`; }
+
+function pending(){ card.innerHTML=`
+  <img class="logo" src="logo-wordmark.png" alt="Cash Clinic" />
+  <div class="ic wait">⏳</div>
+  <h1>استلمنا طلبك</h1>
+  <p>نأكد الدفعة الحين، وبيوصلك الكتاب على إيميلك خلال دقائق.</p>
+  <div class="wa">ما وصلك شي بعد ١٠ دقائق؟ <a href="https://wa.me/${CONFIG.whatsapp}" target="_blank" rel="noopener">راسلنا واتساب</a></div>`; }
+
+function fail(){ card.innerHTML=`
+  <img class="logo" src="logo-wordmark.png" alt="Cash Clinic" />
+  <div class="ic fail">!</div>
+  <h1>ما تمت الدفعة</h1>
+  <p>يبدو إن العملية ما اكتملت. تقدر ترجع وتحاول مرة ثانية.</p>
+  <div class="wa">محتاج مساعدة؟ <a href="https://wa.me/${CONFIG.whatsapp}" target="_blank" rel="noopener">راسلنا واتساب</a></div>`; }
+
+async function poll(tries=0){
+  if(!orderId){ pending(); return; }
+  try{
+    const r=await getOrderStatus({orderId});
+    const s=r.data.status;
+    if(s==="paid"){ ok(); return; }
+    if(s==="failed"||s==="declined"||s==="cancelled"){ fail(); return; }
+  }catch(e){ console.warn(e); }
+  if(tries<8){ setTimeout(()=>poll(tries+1), 2500); } else { pending(); }
+}
+poll();
+</script>
+</body>
+</html>
